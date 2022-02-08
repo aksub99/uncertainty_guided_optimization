@@ -286,7 +286,11 @@ class JTNNVAE(nn.Module):
                     ln_MI_j = torch.ones(num_encoded_molecules,dtype=torch.double).cuda() * math.log(default_MI_value) #Default value if all decoded trees are invalid
                     for z_idx in range(num_encoded_molecules):
                         smile_idx=self.decode(z_tree[z_idx].view(1, self.latent_size), z_mol[z_idx].view(1, self.latent_size), prob_decode=False, fast_uncertainty_decode=True)
-                        smile_idx = Chem.MolToSmiles(Chem.MolFromSmiles(smile_idx), isomericSmiles=True)
+                        try:
+                            smile_idx = Chem.MolToSmiles(Chem.MolFromSmiles(smile_idx), isomericSmiles=True)
+                        except:
+                            print("Invalid smiles ", smile_idx)
+                            smile_idx = Chem.MolToSmiles(Chem.MolFromSmiles('CC'), isomericSmiles=True)
                         decoded_smiles_iter.append(smile_idx)
                         if smile_idx is not None:
                             decoded_mol_trees_0.append(smiles_to_moltree(smile_idx))

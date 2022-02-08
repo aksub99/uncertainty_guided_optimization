@@ -75,10 +75,16 @@ class JTMPN(nn.Module):
         total_atoms = 0
         total_mess = len(mess_dict) + 1 
         scope = []
+        default_smiles = 'CC'
 
         for smiles,all_nodes,ctr_node in cand_batch:
             mol = Chem.MolFromSmiles(smiles)
-            Chem.Kekulize(mol) 
+            try:
+                Chem.Kekulize(mol)
+            except:
+                print("Failed on smiles: ", smiles, " mol: ", mol)
+                mol = Chem.MolFromSmiles(default_smiles)
+                Chem.Kekulize(mol)
             n_atoms = mol.GetNumAtoms()
             ctr_bid = ctr_node.idx
 

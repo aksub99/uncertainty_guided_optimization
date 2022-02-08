@@ -61,6 +61,11 @@ training_stats = {
 final_logP_train_stats_raw={'mean': -0.002467457978476197, 'std': 2.056736565112327, 'median': 0.42761702630532883, 'min': -62.516944569759666, 'max': 4.519902819580757, 'P1': -6.308202037634639, 'P5': -3.7061575195672125, 'P10': -2.6097184083169522, 'P25': -1.0492552134450062, 'P75': 1.4174359964331003, 'P90': 2.1113332292393188, 'P95': 2.4569317747277495, 'P99': 3.0048043651582605}
 final_logP_train_stats_normalized={'mean': -0.0013269769793680093, 'std': 1.0022175676799359, 'median': 0.20822120507327543, 'min': -30.46370322413232, 'max': 2.2023601097894416, 'P1': -3.0740150902231402, 'P5': -1.8060773166698125, 'P10': -1.2717987692036161, 'P25': -0.5114081551001504, 'P75': 0.6905739551134478, 'P90': 1.0286998043562519, 'P95': 1.1971048594070872, 'P99': 1.464075062137245}
 
+final_gap_train_stats_raw={'mean': 3.6446040852826282, 'std': 0.9944647539374162}
+
+decoder_uncertainty_stats_training_gap = {
+}
+
 #Decoder uncertainty stats
 decoder_uncertainty_stats_training ={
     'JTVAE': {
@@ -273,7 +278,7 @@ class assessment_generated_objects():
         
         #De-normalize scores
         if prop=="final_logP":
-            property_df['Property_valid_generated_objects'] = property_df['Property_valid_generated_objects']*final_logP_train_stats_raw['std'] + final_logP_train_stats_raw['mean']
+            property_df['Property_valid_generated_objects'] = property_df['Property_valid_generated_objects']*final_gap_train_stats_raw['std'] + final_gap_train_stats_raw['mean']
         
         property_df.reset_index(inplace=True, drop=True)
         self.top10_valid_molecules  = property_df['Valid_generated_objects'][:10]
@@ -449,6 +454,30 @@ def starting_objects_latent_embeddings(model, data, mode="random", num_objects_t
                 num_starting_points_selected+=1
             index_object_in_dataset+=1
         starting_objects_properties=torch.tensor(starting_objects_properties)
+
+    elif mode=="train_data":
+        num_objects_data = 100
+        starting_objects = np.array(data[:100])
+        print("starting objects: ", starting_objects)
+        print("len starting objects: ", len(starting_objects))
+        if model_type=="JTVAE":
+            starting_objects_smiles = starting_objects
+        elif model_type=="CharVAE":
+            starting_objects_smiles = convert_tensors_to_smiles(starting_objects, model.params.indices_char)
+        starting_objects_latent_embeddings = torch.zeros(num_objects_data, latent_space_dim).to(device)
+        starting_objects_properties = []
+        for batch_object_indices in range(0,num_objects_data, batch_size):
+            a, b = batch_object_indices, batch_object_indices+batch_size
+            print("a: ", a)
+            print("b: ", b)
+            if model_type=="JTVAE":
+                starting_objects_latent_embeddings[a:b] = model.encode_and_samples_from_smiles(starting_objects[a:b])
+            elif model_type=="CharVAE":
+                mu, log_var = model.encoder(starting_objects[a:b])
+                starting_objects_latent_embeddings[a:b] = model.sampling(mu, log_var)
+            for smile in starting_objects_smiles[a:b]:
+                starting_objects_properties.append(compute_target_logP(smile))
+        starting_objects_properties = torch.tensor(starting_objects_properties)
     
     return starting_objects_latent_embeddings, starting_objects_properties, starting_objects_smiles
 
@@ -465,6 +494,7 @@ def gradient_ascent_optimization(model, starting_objects_latent_embeddings, numb
     """
     number_starting_objects = len(starting_objects_latent_embeddings)
     generated_objects_list=[]
+    generated_properties_list=[]
     if model_type=='JTVAE':
         hidden_dim = model.latent_size*2
     elif model_type=='CharVAE':
@@ -489,8 +519,9 @@ def gradient_ascent_optimization(model, starting_objects_latent_embeddings, numb
             a, b = batch_object_indices , batch_object_indices+batch_size
             new_objects_latent_representation_slice = torch.autograd.Variable(new_objects_latent_representation[a:b], requires_grad=True)
             if model_type=='JTVAE':
+                print("shape", new_objects_latent_representation_slice.shape)
                 predicted_property_slice = model.prop_net(new_objects_latent_representation_slice).squeeze()
-                predicted_property_slice = (predicted_property_slice - (final_logP_train_stats_raw['mean'])) / (final_logP_train_stats_raw['std'])
+                predicted_property_slice = (predicted_property_slice - (final_gap_train_stats_raw['mean'])) / (final_gap_train_stats_raw['std'])
             elif model_type=='CharVAE':
                 predicted_property_slice = model.qed_net(new_objects_latent_representation_slice).squeeze()
             
@@ -552,6 +583,10 @@ def gradient_ascent_optimization(model, starting_objects_latent_embeddings, numb
                 z = selected_points[idx].view(1,hidden_dim).to(device)
                 z_tree, z_mol = z[:,:model.latent_size], z[:,model.latent_size:]
                 smiles_new_objects =  model.decode(z_tree, z_mol, prob_decode=False)
+
+                prop = model.prop_net(z).squeeze().detach().cpu().numpy().item()
+                generated_properties_list.append(str(prop))
+                
                 generated_objects_list.append(smiles_new_objects)
         elif model_type=='CharVAE':
             for batch_object_indices in range(0, len(selected_points), batch_size):
@@ -559,7 +594,7 @@ def gradient_ascent_optimization(model, starting_objects_latent_embeddings, numb
                 smiles_new_objects = convert_tensors_to_smiles(decoded_new_objects, model.params.indices_char)
                 generated_objects_list.append(smiles_new_objects)
 
-    return generated_objects_list
+    return generated_objects_list, generated_properties_list
 
 def bayesian_optimization(model, starting_objects_latent_embeddings, starting_objects_properties, number_BO_steps, BO_uncertainty_mode, 
                             BO_uncertainty_threshold='No_constraint', BO_uncertainty_coeff=0.0, uncertainty_decoder_method=None, num_sampled_models=10, num_sampled_outcomes = 40,
@@ -706,3 +741,53 @@ def bayesian_optimization(model, starting_objects_latent_embeddings, starting_ob
                 objects_latent_representation = torch.cat(tensors=(objects_latent_representation, generated_object.view(1,hidden_dim)), dim=0)
     
     return smiles_generated_objects, pred_property_values
+
+def get_stats_train_data(model, starting_objects_latent_embeddings, 
+                        uncertainty_decoder_method=None, num_sampled_models=10, num_sampled_outcomes=40,
+                        model_decoding_mode=None, model_decoding_topk_value=None, 
+                        batch_size=64, model_type="JTVAE"
+                        ):
+    number_starting_objects = len(starting_objects_latent_embeddings)
+    generated_objects_list=[]
+    generated_properties_list=[]
+    if model_type=='JTVAE':
+        hidden_dim = model.latent_size*2
+    elif model_type=='CharVAE':
+        hidden_dim = model.params.z_dim
+        if model_decoding_mode is not None:
+            model.sampling_mode = model_decoding_mode
+            model.generation_top_k_sampling = model_decoding_topk_value
+    
+    all_points_latent_representation = torch.zeros((number_starting_objects, hidden_dim))
+    all_points_latent_representation[:number_starting_objects] = starting_objects_latent_embeddings.view(-1,hidden_dim)
+
+    with torch.no_grad():
+        uncertainty_all_points = torch.zeros(number_starting_objects)
+        for batch_object_indices in range(0, number_starting_objects, batch_size):
+            z_slice = all_points_latent_representation[batch_object_indices:batch_object_indices+batch_size].to(device)
+            uncertainty_all_points[batch_object_indices:batch_object_indices+batch_size] = model.decoder_uncertainty_from_latent(
+                                                                                                    z = z_slice,
+                                                                                                    method = uncertainty_decoder_method,
+                                                                                                    num_sampled_models=num_sampled_models, 
+                                                                                                    num_sampled_outcomes=num_sampled_outcomes
+                                                                                                    ).squeeze().detach().cpu()
+    selected_points = all_points_latent_representation
+    print("Len of selected points: ", len(selected_points))
+    with torch.no_grad():
+        if model_type=='JTVAE':
+            for idx in range(len(selected_points)):
+                z = selected_points[idx].view(1,hidden_dim).to(device)
+                z_tree, z_mol = z[:,:model.latent_size], z[:,model.latent_size:]
+                smiles_new_objects =  model.decode(z_tree, z_mol, prob_decode=False)
+
+                prop = model.prop_net(z).squeeze().detach().cpu().numpy().item()
+                generated_properties_list.append(str(prop))
+                
+                generated_objects_list.append(smiles_new_objects)
+        elif model_type=='CharVAE':
+            for batch_object_indices in range(0, len(selected_points), batch_size):
+                decoded_new_objects =  model.generate_from_latent(selected_points[batch_object_indices:batch_object_indices+batch_size].to(device))
+                smiles_new_objects = convert_tensors_to_smiles(decoded_new_objects, model.params.indices_char)
+                generated_objects_list.append(smiles_new_objects)
+
+    return compute_stats(uncertainty_all_points.numpy())

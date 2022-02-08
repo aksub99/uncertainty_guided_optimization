@@ -8,9 +8,9 @@ export target_property="gap"
 export model_type='JTVAE'
 export model_checkpoint=${DIR}'/JTVAE/checkpoints/jtvae_drop_MLP0.2_GRU0.2_Prop0.2_zdim56_hidden450_prop-gap/model.final'
 export vocab_path=${DIR}'/JTVAE/data/opd/new_vocab.txt'
-export mode_generation_starting_point="random"  #[random|low_property_objects]
+export mode_generation_starting_point="train_data"  #[random|low_property_objects]
 
-export batch_size=100
+export batch_size=32
 export num_starting_points=100
 export optimization_method="gradient_ascent"
 
@@ -24,7 +24,7 @@ export decoder_num_sampled_outcomes=1
 
 export seed=2021
 
-python ../uncertainty_guided_optimization.py \
+python ../get_train_data_stats.py \
             --experiment_name ${experiment_name} \
             --target_property ${target_property} \
             --model_type ${model_type} \

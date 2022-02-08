@@ -1,4 +1,4 @@
-import os,sys
+import os,sys, statistics
 import numpy as np
 import pandas as pd
 import json
@@ -67,10 +67,10 @@ if __name__=="__main__":
         dict_buffer = torch.load(args.model_checkpoint)
         model.load_state_dict(dict_buffer)
         model = model.to(device)
-        with open(dir_path+os.sep+'JTVAE/data/zinc/train.txt') as f:
+        with open(dir_path+os.sep+'JTVAE/data/opd/train.txt') as f:
             train_dataset = [line.strip("\r\n ").split()[0] for line in f]
-        with open(dir_path+os.sep+'JTVAE/data/zinc/test.txt') as f:
-            test_dataset = [line.strip("\r\n ").split()[0] for line in f]
+        # with open(dir_path+os.sep+'JTVAE/data/opd/test.txt') as f:
+        #     test_dataset = [line.strip("\r\n ").split()[0] for line in f]
         hidden_dim = model.latent_size*2
     
     elif args.model_type=='CharVAE':
@@ -78,13 +78,17 @@ if __name__=="__main__":
 
     result_folder = dir_path+os.sep+'results/optimization'
     file_name = str(args.model_type) +'_'+ args.mode_generation_starting_points +"_"+ args.optimization_method + "_" + args.decoder_uncertainty_method + "_" + args.experiment_name + '_zdim_'+ str(hidden_dim)
+    file_name_smiles = file_name + '_' + 'smiles'
+    file_name_properties = file_name + '_' + 'properties'
     if args.optimization_method == "bayesian_optimization":
         run_parameters = '_acq_' + str(args.BO_acquisition_function) + '_Bound_'+str(args.BO_abs_bound)+ '_UncCo_' + str(args.BO_uncertainty_threshold)
     elif args.optimization_method == "gradient_ascent":
         run_parameters = '_steps_' + str(args.GA_number_optimization_steps) + '_alpha_' + str(args.GA_alpha) + '_UB_' + str(args.GA_uncertainty_threshold) 
     file_name = result_folder+os.sep+file_name+run_parameters
+    file_name_smiles = result_folder+os.sep+file_name_smiles+run_parameters
+    file_name_properties = result_folder+os.sep+file_name_properties+run_parameters
     ou.log_stats(file_name=file_name, stats=str(args), log_entry="Passed in arguments")
-    
+
     print("Sample starting positions")
     starting_objects_latent_embeddings, starting_objects_properties, starting_objects_smiles = ou.starting_objects_latent_embeddings(
                                                                                                     model=model, 
@@ -94,12 +98,12 @@ if __name__=="__main__":
                                                                                                     batch_size=args.batch_size, 
                                                                                                     property_upper_bound=args.starting_property_upper_bound,
                                                                                                     model_type=args.model_type)
-    print("Shape of starting_objects_latent_embeddings: "+ str(starting_objects_latent_embeddings.shape))
 
     print("Perform optimization in latent space")
     start_time=time.time()
+    
     if args.optimization_method == "gradient_ascent":
-        generated_objects_list = ou.gradient_ascent_optimization(
+        generated_objects_list, generated_properties_list = ou.gradient_ascent_optimization(
                                                     model=model, 
                                                     starting_objects_latent_embeddings=starting_objects_latent_embeddings,
                                                     number_gradient_steps=args.GA_number_optimization_steps, 
@@ -138,43 +142,55 @@ if __name__=="__main__":
     end_time=time.time()
     duration=end_time-start_time
 
-    print("Log statistics optimization")
-    with open(file_name, "a+") as logs_file:
-        logs_file.write("#"*150+"\n")
-        logs_file.write("Stats for starting molecules\n")
-        logs_file.write("#"*150+"\n")
-        logs_file.write("\n")
-    train_data_smiles = ou.convert_tensors_to_smiles(train_dataset, model.params.indices_char) if args.model_type=="CharVAE" else train_dataset
-    starting_objects_stats = ou.assessment_generated_objects(starting_objects_smiles, model_training_data=train_data_smiles, prop=args.target_property)
-    starting_objects_stats.log_all_stats_generated_objects(file_name)
+    # print("Log statistics optimization")
+    # with open(file_name, "a+") as logs_file:
+    #     logs_file.write("#"*150+"\n")
+    #     logs_file.write("Stats for starting molecules\n")
+    #     logs_file.write("#"*150+"\n")
+    #     logs_file.write("\n")
+    # train_data_smiles = ou.convert_tensors_to_smiles(train_dataset, model.params.indices_char) if args.model_type=="CharVAE" else train_dataset
+    # starting_objects_stats = ou.assessment_generated_objects(starting_objects_smiles, model_training_data=train_data_smiles, prop=args.target_property)
+    # starting_objects_stats.log_all_stats_generated_objects(file_name)
     
-    with open(file_name, "a+") as logs_file:
-        logs_file.write("\n\n")
-        logs_file.write("#"*150+"\n")
-        logs_file.write("Stats for generated molecules\n")
-        logs_file.write("#"*150+"\n")
-        logs_file.write("\n\n")
-        logs_file.write("Number of new objects generated: "+str(len(generated_objects_list))+"\n")
-    ou.log_stats(file_name=file_name, stats=str(generated_objects_list[:10]), log_entry="First 10 objects generated:")
-    generated_objects_stats = ou.assessment_generated_objects(generated_objects_list, model_training_data=train_data_smiles, prop=args.target_property)
-    final_results  = generated_objects_stats.log_all_stats_generated_objects(file_name) 
+    # with open(file_name, "a+") as logs_file:
+    #     logs_file.write("\n\n")
+    #     logs_file.write("#"*150+"\n")
+    #     logs_file.write("Stats for generated molecules\n")
+    #     logs_file.write("#"*150+"\n")
+    #     logs_file.write("\n\n")
+    #     logs_file.write("Number of new objects generated: "+str(len(generated_objects_list))+"\n")
+    # ou.log_stats(file_name=file_name, stats=str(generated_objects_list[:10]), log_entry="First 10 objects generated:")
+    # generated_objects_stats = ou.assessment_generated_objects(generated_objects_list, model_training_data=train_data_smiles, prop=args.target_property)
+    # final_results  = generated_objects_stats.log_all_stats_generated_objects(file_name) 
 
-    db_filename =  result_folder+os.sep+'All_optimization_results.txt'
-    with open(db_filename, "a+") as f:
-        if not os.path.isfile(db_filename) or os.stat(db_filename).st_size == 0:
-            header = "checkpoint_name,experiment_name,seed,optimization_method,subset,decoder_uncertainty_method,decoder_num_sampled_models,decoder_num_sampled_outcomes,BO_abs_bound,BO_uncertainty_threshold,BO_uncertainty_coeff,BO_number_objects_generated,z_dim,run_parameters,\
-            uncertainty_decoder_upper_bound,number_optimization_steps,alpha,top1_prop,top2_prop,top3_prop,top4_prop,top5_prop,prop_all,validity_all,unicity_all,novelty_all,quality_all,qed_all,prop_top10,unicity_top10,novelty_top10,quality_top10,qed_top10,\
-            prop_top50,property_all_qual,property_top1_qual,property_top2_qual,property_top3_qual,property_top4_qual,property_top5_qual,property_top6_qual,property_top7_qual,property_top8_qual,property_top9_qual,property_top10_qual,property_top5avg_qual,\
-            property_top10avg_qual,property_top50avg_qual,qed_all_qual,qed_top10_qual,duration"
-            f.write(header+"\n")
-        res = ','.join([str(x) for x in [args.model_checkpoint, args.experiment_name, args.seed, args.optimization_method, "all", args.decoder_uncertainty_method, args.decoder_num_sampled_models, args.decoder_num_sampled_outcomes, args.BO_abs_bound, args.BO_uncertainty_threshold, args.BO_uncertainty_coeff, args.BO_number_objects_generated, hidden_dim,\
-                            run_parameters, args.GA_uncertainty_threshold, args.GA_number_optimization_steps, args.GA_alpha, final_results['top1'],final_results['top2'],final_results['top3'],\
-                            final_results['top4'],final_results['top5'],final_results['target_property_all'],final_results['validity_all'], final_results['unicity_all'], final_results['novelty_all'], final_results['quality_all'], final_results['qed_all'],\
-                            final_results['target_property_top10'], final_results['unicity_top10'], final_results['novelty_top10'], final_results['quality_top10'], final_results['qed_top10'],final_results['target_property_top50'],\
-                            final_results['property_all_qual'], final_results['property_top1_qual'], final_results['property_top2_qual'], final_results['property_top3_qual'], final_results['property_top4_qual'], final_results['property_top5_qual'], final_results['property_top6_qual'], final_results['property_top7_qual'],\
-                            final_results['property_top8_qual'], final_results['property_top9_qual'], final_results['property_top10_qual'], final_results['property_top5avg_qual'], final_results['property_top10avg_qual'],\
-                            final_results['property_top50avg_qual'],final_results['qed_all_qual'], final_results['qed_top10_qual'],duration
-                            ]
-        ])
-        f.write(res+"\n")
+    with open(file_name_smiles, 'w') as f:
+        for smiles in generated_objects_list:
+            f.write(smiles)
+            f.write('\n')
+
+    props = []
+    with open(file_name_properties, 'w') as f:
+        for prop in generated_properties_list:
+            f.write(prop)
+            f.write('\n')
+            props.append(float(prop))
+    print(statistics.mean(props))
+    # db_filename =  result_folder+os.sep+'All_optimization_results.txt'
+    # with open(db_filename, "a+") as f:
+    #     if not os.path.isfile(db_filename) or os.stat(db_filename).st_size == 0:
+    #         header = "checkpoint_name,experiment_name,seed,optimization_method,subset,decoder_uncertainty_method,decoder_num_sampled_models,decoder_num_sampled_outcomes,BO_abs_bound,BO_uncertainty_threshold,BO_uncertainty_coeff,BO_number_objects_generated,z_dim,run_parameters,\
+    #         uncertainty_decoder_upper_bound,number_optimization_steps,alpha,top1_prop,top2_prop,top3_prop,top4_prop,top5_prop,prop_all,validity_all,unicity_all,novelty_all,quality_all,qed_all,prop_top10,unicity_top10,novelty_top10,quality_top10,qed_top10,\
+    #         prop_top50,property_all_qual,property_top1_qual,property_top2_qual,property_top3_qual,property_top4_qual,property_top5_qual,property_top6_qual,property_top7_qual,property_top8_qual,property_top9_qual,property_top10_qual,property_top5avg_qual,\
+    #         property_top10avg_qual,property_top50avg_qual,qed_all_qual,qed_top10_qual,duration"
+    #         f.write(header+"\n")
+    #     res = ','.join([str(x) for x in [args.model_checkpoint, args.experiment_name, args.seed, args.optimization_method, "all", args.decoder_uncertainty_method, args.decoder_num_sampled_models, args.decoder_num_sampled_outcomes, args.BO_abs_bound, args.BO_uncertainty_threshold, args.BO_uncertainty_coeff, args.BO_number_objects_generated, hidden_dim,\
+    #                         run_parameters, args.GA_uncertainty_threshold, args.GA_number_optimization_steps, args.GA_alpha, final_results['top1'],final_results['top2'],final_results['top3'],\
+    #                         final_results['top4'],final_results['top5'],final_results['target_property_all'],final_results['validity_all'], final_results['unicity_all'], final_results['novelty_all'], final_results['quality_all'], final_results['qed_all'],\
+    #                         final_results['target_property_top10'], final_results['unicity_top10'], final_results['novelty_top10'], final_results['quality_top10'], final_results['qed_top10'],final_results['target_property_top50'],\
+    #                         final_results['property_all_qual'], final_results['property_top1_qual'], final_results['property_top2_qual'], final_results['property_top3_qual'], final_results['property_top4_qual'], final_results['property_top5_qual'], final_results['property_top6_qual'], final_results['property_top7_qual'],\
+    #                         final_results['property_top8_qual'], final_results['property_top9_qual'], final_results['property_top10_qual'], final_results['property_top5avg_qual'], final_results['property_top10avg_qual'],\
+    #                         final_results['property_top50avg_qual'],final_results['qed_all_qual'], final_results['qed_top10_qual'],duration
+    #                         ]
+    #     ])
+    #     f.write(res+"\n")
         
