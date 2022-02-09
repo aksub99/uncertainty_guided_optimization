@@ -64,6 +64,9 @@ final_logP_train_stats_normalized={'mean': -0.0013269769793680093, 'std': 1.0022
 final_gap_train_stats_raw={'mean': 3.6446040852826282, 'std': 0.9944647539374162}
 
 decoder_uncertainty_stats_training_gap = {
+    'JTVAE': {
+        'MI_Importance_sampling': {'mean': 1.8212296, 'std': 1.3168066, 'median': 1.5972527, 'min': 0.0055349832, 'max': 4.604037, 'P1': 0.01494159184396267, 'P5': 0.06182809602469206, 'P25': 0.6531272232532501, 'P75': 2.7481250166893005, 'P95': 4.055848336219787, 'P99': 4.573595452308655}
+    }
 }
 
 #Decoder uncertainty stats
@@ -400,7 +403,7 @@ class assessment_generated_objects():
 
 ###################################### OPTIMIZATION INITIALIZATION ##################################################
 
-def starting_objects_latent_embeddings(model, data, mode="random", num_objects_to_select=100, batch_size=256, property_upper_bound=None, model_type="JTVAE"):
+def starting_objects_latent_embeddings(model, data, mode="random", num_objects_to_select=100, batch_size=256, property_upper_bound=None, model_type="JTVAE", index=0):
     if model_type=="JTVAE":
         latent_space_dim = model.latent_size * 2
     elif model_type=="CharVAE":
@@ -456,8 +459,12 @@ def starting_objects_latent_embeddings(model, data, mode="random", num_objects_t
         starting_objects_properties=torch.tensor(starting_objects_properties)
 
     elif mode=="train_data":
-        num_objects_data = 100
-        starting_objects = np.array(data[:100])
+        num_objects_data = num_objects_to_select
+        if index+num_objects_data > len(data)-1:
+            starting_objects = np.array(data[index:])
+            num_objects_data = len(data[index:])
+        else:
+            starting_objects = np.array(data[index:index+num_objects_data])
         print("starting objects: ", starting_objects)
         print("len starting objects: ", len(starting_objects))
         if model_type=="JTVAE":
@@ -468,8 +475,6 @@ def starting_objects_latent_embeddings(model, data, mode="random", num_objects_t
         starting_objects_properties = []
         for batch_object_indices in range(0,num_objects_data, batch_size):
             a, b = batch_object_indices, batch_object_indices+batch_size
-            print("a: ", a)
-            print("b: ", b)
             if model_type=="JTVAE":
                 starting_objects_latent_embeddings[a:b] = model.encode_and_samples_from_smiles(starting_objects[a:b])
             elif model_type=="CharVAE":
@@ -478,7 +483,7 @@ def starting_objects_latent_embeddings(model, data, mode="random", num_objects_t
             for smile in starting_objects_smiles[a:b]:
                 starting_objects_properties.append(compute_target_logP(smile))
         starting_objects_properties = torch.tensor(starting_objects_properties)
-    
+ 
     return starting_objects_latent_embeddings, starting_objects_properties, starting_objects_smiles
 
 ###################################### OPTIMIZATION ROUTINES ##################################################
@@ -790,4 +795,4 @@ def get_stats_train_data(model, starting_objects_latent_embeddings,
                 smiles_new_objects = convert_tensors_to_smiles(decoded_new_objects, model.params.indices_char)
                 generated_objects_list.append(smiles_new_objects)
 
-    return compute_stats(uncertainty_all_points.numpy())
+    return uncertainty_all_points.numpy()

@@ -11,7 +11,7 @@ export vocab_path=${DIR}'/JTVAE/data/opd/new_vocab.txt'
 export mode_generation_starting_point="train_data"  #[random|low_property_objects]
 
 export batch_size=32
-export num_starting_points=100
+export num_starting_points=500
 export optimization_method="gradient_ascent"
 
 export GA_number_optimization_steps=100

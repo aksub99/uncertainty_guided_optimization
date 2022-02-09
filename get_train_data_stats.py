@@ -78,32 +78,44 @@ if __name__=="__main__":
         pass 
 
     print("Sample starting positions")
-    starting_objects_latent_embeddings, starting_objects_properties, starting_objects_smiles = ou.starting_objects_latent_embeddings(
-                                                                                                    model=model, 
-                                                                                                    data=train_dataset, 
-                                                                                                    mode=args.mode_generation_starting_points,
-                                                                                                    num_objects_to_select=args.num_starting_points, 
-                                                                                                    batch_size=args.batch_size, 
-                                                                                                    property_upper_bound=args.starting_property_upper_bound,
-                                                                                                    model_type=args.model_type)
-    print("latent embeddings shape: ", starting_objects_latent_embeddings.shape)
+    uncertainty_list_full = []
+    # uncertainty_array_full = np.empty(shape=(len(train_dataset),))
+    for index in range(0, len(train_dataset), args.num_starting_points):
+        starting_objects_latent_embeddings, starting_objects_properties, starting_objects_smiles = ou.starting_objects_latent_embeddings(
+                                                                                                        model=model, 
+                                                                                                        data=train_dataset, 
+                                                                                                        mode=args.mode_generation_starting_points,
+                                                                                                        num_objects_to_select=args.num_starting_points, 
+                                                                                                        batch_size=args.batch_size, 
+                                                                                                        property_upper_bound=args.starting_property_upper_bound,
+                                                                                                        model_type=args.model_type,
+                                                                                                        index=index)
+        print("latent embeddings shape: ", starting_objects_latent_embeddings.shape)
 
-    print("Perform optimization in latent space")
-    start_time=time.time()
+        print("Perform optimization in latent space")
+        start_time=time.time()
+        
+        uncertainty_array = ou.get_stats_train_data(
+                                model=model,
+                                starting_objects_latent_embeddings=starting_objects_latent_embeddings,
+                                num_sampled_models=args.decoder_num_sampled_models,
+                                uncertainty_decoder_method=args.decoder_uncertainty_method,
+                                num_sampled_outcomes=args.decoder_num_sampled_outcomes,
+                                model_decoding_mode=args.model_decoding_mode,
+                                model_decoding_topk_value=args.model_decoding_topk_value,
+                                batch_size=args.batch_size,
+                                model_type=args.model_type
+                                )
     
-    train_stats = ou.get_stats_train_data(
-                            model=model,
-                            starting_objects_latent_embeddings=starting_objects_latent_embeddings,
-                            num_sampled_models=args.decoder_num_sampled_models,
-                            uncertainty_decoder_method=args.decoder_uncertainty_method,
-                            num_sampled_outcomes=args.decoder_num_sampled_outcomes,
-                            model_decoding_mode=args.model_decoding_mode,
-                            model_decoding_topk_value=args.model_decoding_topk_value,
-                            batch_size=args.batch_size,
-                            model_type=args.model_type
-                            )
-    print("train stats: ", train_stats)
+        uncertainty_list_full.extend(list(uncertainty_array))
+        # uncertainty_array_full = np.append(uncertainty_array_full, uncertainty_array)
+        # print(uncertainty_array_full, uncertainty_array_full.shape)
+        train_stats = ou.compute_stats(np.array(uncertainty_list_full))
+        print("train stats: ", train_stats)
+        del starting_objects_latent_embeddings
+        del starting_objects_properties
+        del starting_objects_smiles
+        
+        end_time=time.time()
+        duration=end_time-start_time
     
-    end_time=time.time()
-    duration=end_time-start_time
- 
