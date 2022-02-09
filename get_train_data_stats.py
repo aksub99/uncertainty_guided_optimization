@@ -90,7 +90,6 @@ if __name__=="__main__":
                                                                                                         property_upper_bound=args.starting_property_upper_bound,
                                                                                                         model_type=args.model_type,
                                                                                                         index=index)
-        print("latent embeddings shape: ", starting_objects_latent_embeddings.shape)
 
         print("Perform optimization in latent space")
         start_time=time.time()
@@ -110,12 +109,11 @@ if __name__=="__main__":
         uncertainty_list_full.extend(list(uncertainty_array))
         # uncertainty_array_full = np.append(uncertainty_array_full, uncertainty_array)
         # print(uncertainty_array_full, uncertainty_array_full.shape)
-        train_stats = ou.compute_stats(np.array(uncertainty_list_full))
-        print("train stats: ", train_stats)
         del starting_objects_latent_embeddings
         del starting_objects_properties
         del starting_objects_smiles
         
         end_time=time.time()
         duration=end_time-start_time
-    
+    train_stats = ou.compute_stats(np.array(uncertainty_list_full))
+    print("train stats: ", train_stats)

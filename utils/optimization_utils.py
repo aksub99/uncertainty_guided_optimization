@@ -465,8 +465,6 @@ def starting_objects_latent_embeddings(model, data, mode="random", num_objects_t
             num_objects_data = len(data[index:])
         else:
             starting_objects = np.array(data[index:index+num_objects_data])
-        print("starting objects: ", starting_objects)
-        print("len starting objects: ", len(starting_objects))
         if model_type=="JTVAE":
             starting_objects_smiles = starting_objects
         elif model_type=="CharVAE":
@@ -524,7 +522,6 @@ def gradient_ascent_optimization(model, starting_objects_latent_embeddings, numb
             a, b = batch_object_indices , batch_object_indices+batch_size
             new_objects_latent_representation_slice = torch.autograd.Variable(new_objects_latent_representation[a:b], requires_grad=True)
             if model_type=='JTVAE':
-                print("shape", new_objects_latent_representation_slice.shape)
                 predicted_property_slice = model.prop_net(new_objects_latent_representation_slice).squeeze()
                 predicted_property_slice = (predicted_property_slice - (final_gap_train_stats_raw['mean'])) / (final_gap_train_stats_raw['std'])
             elif model_type=='CharVAE':
@@ -777,7 +774,6 @@ def get_stats_train_data(model, starting_objects_latent_embeddings,
                                                                                                     num_sampled_outcomes=num_sampled_outcomes
                                                                                                     ).squeeze().detach().cpu()
     selected_points = all_points_latent_representation
-    print("Len of selected points: ", len(selected_points))
     with torch.no_grad():
         if model_type=='JTVAE':
             for idx in range(len(selected_points)):
