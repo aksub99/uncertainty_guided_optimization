@@ -63,19 +63,25 @@ final_logP_train_stats_normalized={'mean': -0.0013269769793680093, 'std': 1.0022
 
 final_gap_train_stats_raw={'mean': 3.6446040852826282, 'std': 0.9944647539374162}
 
-decoder_uncertainty_stats_training_gap = {
+# decoder_uncertainty_stats_training = {
+#     'JTVAE': {
+#         'MI_Importance_sampling': {'mean': 1.8212296, 'std': 1.3168066, 'median': 1.5972527, 'min': 0.0055349832, 'max': 4.604037, 'P1': 0.01494159184396267, 'P5': 0.06182809602469206, 'P25': 0.6531272232532501, 'P75': 2.7481250166893005, 'P95': 4.055848336219787, 'P99': 4.573595452308655}
+#     }
+# }
+
+decoder_uncertainty_stats_training = {
     'JTVAE': {
-        'MI_Importance_sampling': {'mean': 1.8212296, 'std': 1.3168066, 'median': 1.5972527, 'min': 0.0055349832, 'max': 4.604037, 'P1': 0.01494159184396267, 'P5': 0.06182809602469206, 'P25': 0.6531272232532501, 'P75': 2.7481250166893005, 'P95': 4.055848336219787, 'P99': 4.573595452308655}
+        'MI_Importance_sampling': {'mean': 1.5811201, 'std': 1.2532661, 'median': 1.3607389, 'min': 0.00022536742, 'max': 4.60517, 'P1': 0.008922570943832397, 'P5': 0.05101021006703377, 'P25': 0.4337698817253113, 'P75': 2.492251753807068, 'P95': 3.931748414039613, 'P99': 4.5108065700531} 
     }
 }
 
 #Decoder uncertainty stats
-decoder_uncertainty_stats_training ={
-    'JTVAE': {
-        'MI_Importance_sampling': {'mean': 0.7737001577503979, 'std': 0.7191886465214079, 'median': 0.6115016341209412, 'min': 0.003500204300507903, 'max': 3.2164592742919917, 'P1': 0.004812391460873187, 'P5': 0.03621037751436234, 'P25': 0.16248027607798576, 'P75': 1.1251116693019867, 'P95': 2.4251182436943055, 'P99': 2.9005215597152705},
-        'NLL_prior': {'mean': 110.49043981933593, 'std': 22.952045705008157, 'median': 106.87257385253906, 'min': 80.51214599609375, 'max': 199.3219451904297, 'P1': 83.63397506713868, 'P5': 86.59568367004395, 'P25': 96.7742748260498, 'P75': 117.61268424987794, 'P95': 147.31882400512683, 'P99': 195.5686897277832}
-    }
-}
+# decoder_uncertainty_stats_training ={
+#     'JTVAE': {
+#         'MI_Importance_sampling': {'mean': 0.7737001577503979, 'std': 0.7191886465214079, 'median': 0.6115016341209412, 'min': 0.003500204300507903, 'max': 3.2164592742919917, 'P1': 0.004812391460873187, 'P5': 0.03621037751436234, 'P25': 0.16248027607798576, 'P75': 1.1251116693019867, 'P95': 2.4251182436943055, 'P99': 2.9005215597152705},
+#         'NLL_prior': {'mean': 110.49043981933593, 'std': 22.952045705008157, 'median': 106.87257385253906, 'min': 80.51214599609375, 'max': 199.3219451904297, 'P1': 83.63397506713868, 'P5': 86.59568367004395, 'P25': 96.7742748260498, 'P75': 117.61268424987794, 'P95': 147.31882400512683, 'P99': 195.5686897277832}
+#     }
+# }
 
 
 def verify_smile(smile):
@@ -469,12 +475,12 @@ def starting_objects_latent_embeddings(model, data, mode="random", num_objects_t
             starting_objects_smiles = starting_objects
         elif model_type=="CharVAE":
             starting_objects_smiles = convert_tensors_to_smiles(starting_objects, model.params.indices_char)
-        starting_objects_latent_embeddings = torch.zeros(num_objects_data, latent_space_dim).to(device)
+        starting_objects_latent_embeddings = torch.zeros(num_objects_data, latent_space_dim)
         starting_objects_properties = []
         for batch_object_indices in range(0,num_objects_data, batch_size):
             a, b = batch_object_indices, batch_object_indices+batch_size
             if model_type=="JTVAE":
-                starting_objects_latent_embeddings[a:b] = model.encode_and_samples_from_smiles(starting_objects[a:b])
+                starting_objects_latent_embeddings[a:b] = model.encode_and_samples_from_smiles(starting_objects[a:b]).detach().cpu()
             elif model_type=="CharVAE":
                 mu, log_var = model.encoder(starting_objects[a:b])
                 starting_objects_latent_embeddings[a:b] = model.sampling(mu, log_var)
@@ -764,6 +770,7 @@ def get_stats_train_data(model, starting_objects_latent_embeddings,
     all_points_latent_representation[:number_starting_objects] = starting_objects_latent_embeddings.view(-1,hidden_dim)
 
     with torch.no_grad():
+        torch.cuda.empty_cache()
         uncertainty_all_points = torch.zeros(number_starting_objects)
         for batch_object_indices in range(0, number_starting_objects, batch_size):
             z_slice = all_points_latent_representation[batch_object_indices:batch_object_indices+batch_size].to(device)
@@ -773,22 +780,22 @@ def get_stats_train_data(model, starting_objects_latent_embeddings,
                                                                                                     num_sampled_models=num_sampled_models, 
                                                                                                     num_sampled_outcomes=num_sampled_outcomes
                                                                                                     ).squeeze().detach().cpu()
-    selected_points = all_points_latent_representation
-    with torch.no_grad():
-        if model_type=='JTVAE':
-            for idx in range(len(selected_points)):
-                z = selected_points[idx].view(1,hidden_dim).to(device)
-                z_tree, z_mol = z[:,:model.latent_size], z[:,model.latent_size:]
-                smiles_new_objects =  model.decode(z_tree, z_mol, prob_decode=False)
+    # selected_points = all_points_latent_representation
+    # with torch.no_grad():
+    #     if model_type=='JTVAE':
+    #         for idx in range(len(selected_points)):
+    #             z = selected_points[idx].view(1,hidden_dim).to(device)
+    #             z_tree, z_mol = z[:,:model.latent_size], z[:,model.latent_size:]
+    #             smiles_new_objects =  model.decode(z_tree, z_mol, prob_decode=False)
 
-                prop = model.prop_net(z).squeeze().detach().cpu().numpy().item()
-                generated_properties_list.append(str(prop))
+    #             prop = model.prop_net(z).squeeze().detach().cpu().numpy().item()
+    #             generated_properties_list.append(str(prop))
                 
-                generated_objects_list.append(smiles_new_objects)
-        elif model_type=='CharVAE':
-            for batch_object_indices in range(0, len(selected_points), batch_size):
-                decoded_new_objects =  model.generate_from_latent(selected_points[batch_object_indices:batch_object_indices+batch_size].to(device))
-                smiles_new_objects = convert_tensors_to_smiles(decoded_new_objects, model.params.indices_char)
-                generated_objects_list.append(smiles_new_objects)
+    #             generated_objects_list.append(smiles_new_objects)
+    #     elif model_type=='CharVAE':
+    #         for batch_object_indices in range(0, len(selected_points), batch_size):
+    #             decoded_new_objects =  model.generate_from_latent(selected_points[batch_object_indices:batch_object_indices+batch_size].to(device))
+    #             smiles_new_objects = convert_tensors_to_smiles(decoded_new_objects, model.params.indices_char)
+    #             generated_objects_list.append(smiles_new_objects)
 
     return uncertainty_all_points.numpy()
