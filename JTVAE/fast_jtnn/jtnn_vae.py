@@ -355,7 +355,8 @@ class JTNNVAE_prop(JTNNVAE):
                     nn.Linear(self.latent_size * 2, self.hidden_size),
                     nn.Dropout(drop_prop_NN),
                     nn.Tanh(),
-                    nn.Linear(self.hidden_size, 1)
+                    nn.Linear(self.hidden_size, 1),
+                    nn.ReLU()
             )
     
     def save_params(self, save_path, name_parameter_file):

@@ -3,10 +3,10 @@
 # source activate uncertainty_guided_env
 export PYTHONPATH=${PYTHONPATH}:${DIR}
 
-export train_path=${DIR}'/JTVAE/data/opd/train.txt'
+export train_path=${DIR}'/JTVAE/data/opd_small/combined.txt'
 export vocab_path=${DIR}'/JTVAE/data/opd/new_vocab.txt'
-export prop_path=${DIR}'/JTVAE/data/opd/train.gap'
-export save_path=${DIR}'/JTVAE/checkpoints/jtvae_drop_MLP0.2_GRU0.2_Prop0.2_zdim56_hidden450_prop-gap'
+export prop_path=${DIR}'/JTVAE/data/opd_small/combined.gap'
+export save_path=${DIR}'/JTVAE/checkpoints_small/jtvae_drop_MLP0.2_GRU0.2_Prop0.2_zdim56_hidden450_prop-gap'
 
 export bs=32
 export dropout_rate_MLP=0.2

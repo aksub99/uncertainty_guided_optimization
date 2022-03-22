@@ -4,6 +4,6 @@ export DIR="$(dirname "$(pwd)")"
 export PYTHONPATH=${PYTHONPATH}:${DIR}
 
 python ../JTVAE/fast_molvae/data_preprocess.py \
-                --train ${DIR}'/JTVAE/data/opd/train.txt' \
+                --train ${DIR}'/JTVAE/data/opd_small_large/train.txt' \
                 --split 100 --jobs 40 \
-                --output ${DIR}'/JTVAE/data/opd_processed'
+                --output ${DIR}'/JTVAE/data/opd_small_large_processed'

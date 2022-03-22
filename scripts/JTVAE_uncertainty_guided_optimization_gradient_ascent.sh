@@ -6,7 +6,7 @@ export PYTHONPATH=${PYTHONPATH}:${DIR}
 export experiment_name="20220117"
 export target_property="gap"
 export model_type='JTVAE'
-export model_checkpoint=${DIR}'/JTVAE/checkpoints/jtvae_drop_MLP0.2_GRU0.2_Prop0.2_zdim56_hidden450_prop-gap/model.final'
+export model_checkpoint=${DIR}'/JTVAE/checkpoints_small/jtvae_drop_MLP0.2_GRU0.2_Prop0.2_zdim56_hidden450_prop-gap/model.finetuned_final'
 export vocab_path=${DIR}'/JTVAE/data/opd/new_vocab.txt'
 export mode_generation_starting_point="random"  #[random|low_property_objects]
 
